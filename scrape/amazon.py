@@ -65,9 +65,9 @@ async def get_all_page():
 
 if __name__ == "__main__":
     # save various filters
-    with open(f"data/{COMPANY}-filter.json", "w") as file:
+    with open(f"data/{COMPANY}-filter-{date.today()}.json", "w") as file:
         json.dump(get_filter(), file, indent=4, sort_keys=True)
     
     # save the jobs description
     result = asyncio.run(get_all_page())
-    pd.DataFrame(result).to_csv(f"data/{COMPANY}-{date.today()}.csv", index=False)
+    pd.DataFrame(result).to_csv(f"data/{COMPANY}-{date.today()}.csv", index=False, encoding="utf-8-sig")

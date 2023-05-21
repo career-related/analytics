@@ -60,6 +60,6 @@ if __name__ == "__main__":
     # df = pd.read_csv("data/microsoft-2023-05-07-unprocessed.csv")
     # df["properties"] = df["properties"].apply(lambda x: ast.literal_eval(x))
     # df = pd.concat([df.drop('properties', axis=1), pd.DataFrame(df['properties'].tolist())], axis=1)
-    # df.to_csv(f"data/{COMPANY}-{date.today()}.csv", index=False)
+    # df.to_csv(f"data/{COMPANY}-{date.today()}.csv", index=False, encoding="utf-8-sig")
 
 # fields of jobs - jobId, title, postingDate, properties (description, locations, primaryLocation, workSiteFlexibility, profession, discipline, jobType, roleType, employmentType, educationLevel)

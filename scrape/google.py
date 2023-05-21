@@ -70,4 +70,4 @@ if __name__ == "__main__":
     
     # save the jobs description
     result = asyncio.run(get_all_page())
-    pd.DataFrame(result).to_csv(f"data/{COMPANY}-{date.today()}.csv", index=False)
+    pd.DataFrame(result).to_csv(f"data/{COMPANY}-{date.today()}.csv", index=False, encoding="utf-8-sig")
