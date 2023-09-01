@@ -4,6 +4,8 @@ Website: https://www.amazon.jobs/en/search?base_query=&loc_query=
 
 import asyncio
 import json
+import math
+import time
 from datetime import date
 
 import aiohttp
@@ -13,7 +15,7 @@ import requests
 # dict key from response body - ['error', 'hits', 'facets', 'content', 'jobs']
 
 COMPANY = "amazon"
-PAGE_SIZE = 10
+PAGE_SIZE = 100
 
 
 def scrape_single(page: int):
@@ -30,11 +32,21 @@ async def scrape_single_async(session, page: int):
         resp_json = await resp.json()
         return resp_json
 
-def get_total_page():
+async def scrape_multiple_async(start_page: int, end_page: int):
+    tasks = []
+    async with aiohttp.ClientSession() as session:
+        for page in range(start_page, end_page + 1):
+            task = scrape_single_async(session, page)
+            tasks.append(task)
+        result = await asyncio.gather(*tasks)
+    result = [item for sublist in result for item in sublist["jobs"]]
+    return result
+
+def get_total_record():
     """Get the total number of pages to scrape based on total jobs and page size"""
     key_dict = scrape_single(1)
     print(f"Total jobs: {key_dict['hits']}")
-    return key_dict["hits"] // PAGE_SIZE + 1 
+    return key_dict["hits"] 
 
 def get_filter():
     """Get all available filters"""
@@ -50,16 +62,24 @@ def get_filter():
 #         jobs.extend(res_json["jobs"])
 #     return jobs
 
-async def get_all_page():
+async def get_all_pages():
     """Scrape all page and append to a dataframe"""
-    total_page = get_total_page()
-    tasks = []
-    async with aiohttp.ClientSession() as session:
-        for page in range(1, total_page + 1):
-            task = scrape_single_async(session, page)
-            tasks.append(task)
-        result = await asyncio.gather(*tasks)
-    result = [item for sublist in result for item in sublist["jobs"]]
+    total_record = get_total_record()
+    total_page = math.ceil(total_record / PAGE_SIZE)
+    # amazon do not allow retrieval of > 10,000 records
+    if total_record < 10000:
+        result = await scrape_multiple_async(1, total_page)
+    else:
+        # if there are > 10,000 records, scrape multiple time
+        num_page = math.ceil(10000 / PAGE_SIZE) - 1
+        iteration = math.ceil(total_page / num_page)
+        result = []
+        for i in range(0, iteration):
+            run = await scrape_multiple_async(
+                i * num_page + 1, 
+                min(total_page, (i + 1) * num_page))
+            result.extend(run)
+            time.sleep(100)
     return result
 
 
@@ -69,5 +89,5 @@ if __name__ == "__main__":
         json.dump(get_filter(), file, indent=4, sort_keys=True)
     
     # save the jobs description
-    result = asyncio.run(get_all_page())
+    result = asyncio.run(get_all_pages())
     pd.DataFrame(result).to_csv(f"data/{COMPANY}-{date.today()}.csv", index=False, encoding="utf-8-sig")
