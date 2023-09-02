@@ -4,6 +4,7 @@ Website: https://jobs.careers.microsoft.com/global/en/search?l=en_us&pg=1&pgSz=2
 
 import ast
 import json
+import math
 from datetime import date
 
 import pandas as pd
@@ -26,11 +27,11 @@ def scrape_single(page: int):
         key_dict[key] = resp_json["operationResult"]["result"][key]
     return key_dict
 
-def get_total_page():
+def get_total_record():
     """Get the total number of pages to scrape based on total jobs and page size"""
     key_dict = scrape_single(1)
     print(f"Total jobs: {key_dict['totalJobs']}")
-    return key_dict["totalJobs"] // PAGE_SIZE + 1 
+    return key_dict["totalJobs"] 
 
 def get_filter():
     """Get all available filters"""
@@ -39,7 +40,7 @@ def get_filter():
 
 def get_all_page():
     """Scrape all page and append to a dataframe"""
-    total_page = get_total_page()
+    total_page = math.ceil(get_total_record() / PAGE_SIZE)
     jobs = []
     for page in range(1, total_page + 1):
         key_dict = scrape_single(page)

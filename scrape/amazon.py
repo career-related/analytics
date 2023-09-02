@@ -5,7 +5,6 @@ Website: https://www.amazon.jobs/en/search?base_query=&loc_query=
 import asyncio
 import json
 import math
-import time
 from datetime import date
 
 import aiohttp
@@ -16,6 +15,7 @@ import requests
 
 COMPANY = "amazon"
 PAGE_SIZE = 100
+MAX_RECORD = 10000  # Amazon API won't serve the job postings after 10,000th records
 
 
 def scrape_single(page: int):
@@ -72,14 +72,7 @@ async def get_all_pages():
     else:
         # if there are > 10,000 records, scrape multiple time
         num_page = math.ceil(10000 / PAGE_SIZE) - 1
-        iteration = math.ceil(total_page / num_page)
-        result = []
-        for i in range(0, iteration):
-            run = await scrape_multiple_async(
-                i * num_page + 1, 
-                min(total_page, (i + 1) * num_page))
-            result.extend(run)
-            time.sleep(100)
+        result = await scrape_multiple_async(1, num_page)
     return result
 
 

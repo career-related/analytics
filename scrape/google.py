@@ -3,7 +3,7 @@ Website: https://careers.google.com/jobs/results/?distance=50&hl=en_US&jlo=en_US
 """
 
 import asyncio
-import json
+import math
 from datetime import date
 
 import aiohttp
@@ -30,11 +30,11 @@ async def scrape_single_async(session, page: int):
         resp_json = await resp.json()
         return resp_json
 
-def get_total_page():
+def get_total_record():
     """Get the total number of pages to scrape based on total jobs and page size"""
     key_dict = scrape_single(1)
     print(f"Total jobs: {key_dict['count']}")
-    return key_dict["count"] // PAGE_SIZE + 1 
+    return key_dict["count"]
 
 # def get_filter():
 #     """Get all available filters"""
@@ -52,7 +52,7 @@ def get_total_page():
 
 async def get_all_page():
     """Scrape all page and append to a dataframe"""
-    total_page = get_total_page()
+    total_page = math.ceil(get_total_record() / PAGE_SIZE)
     tasks = []
     async with aiohttp.ClientSession() as session:
         for page in range(1, total_page + 1):
