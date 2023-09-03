@@ -52,7 +52,8 @@ def get_total_record():
 
 async def get_all_page():
     """Scrape all page and append to a dataframe"""
-    total_page = math.ceil(get_total_record() / PAGE_SIZE)
+    total_record = get_total_record()
+    total_page = math.ceil(total_record / PAGE_SIZE)
     tasks = []
     async with aiohttp.ClientSession() as session:
         for page in range(1, total_page + 1):
