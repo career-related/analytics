@@ -9,18 +9,11 @@ COMPANY = "apple"
 PAGE_SIZE = 20
 
 body = {
-  "query": "",
-  "filters": {
-    "range": {
-      "standardWeeklyHours": {
-        "start": "null",
-        "end": "null"
-      }
-    }
-  },
-  "page": 1,
-  "locale": "en-us",
-  "sort": "relevance"
+    "query": "",
+    "filters": {"range": {"standardWeeklyHours": {"start": "null", "end": "null"}}},
+    "page": 1,
+    "locale": "en-us",
+    "sort": "relevance",
 }
 
 with requests.Session() as s:
@@ -39,7 +32,7 @@ with requests.Session() as s:
         "countrycode": "USA",
         "roveremaillocalecode": "en_US",
         # "cookie": resp1.headers["Set-Cookie"],
-        "x-apple-csrf-token": csrf_token
+        "x-apple-csrf-token": csrf_token,
     }
     url = "https://jobs.apple.com/api/role/search"
     resp = s.post(url, json=body, headers=headers)
@@ -47,5 +40,3 @@ with requests.Session() as s:
 
     print(resp.status_code)
     print(resp.text)
-
-

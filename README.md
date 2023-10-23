@@ -5,4 +5,4 @@ Scraping
 - [ ] Apple (wip)
 - [X]  Google
 - [ ] Meta (wip)
-- [ ] Microsoft
+- [X] Microsoft

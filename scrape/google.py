@@ -23,6 +23,7 @@ def scrape_single(page: int):
     resp_json = resp.json()
     return resp_json
 
+
 async def scrape_single_async(session, page: int):
     """Scrape a single page of microsoft career website"""
     url = f"https://careers.google.com/api/v3/search/?distance=50&hl=en_US&jlo=en_US&page={page}&q="
@@ -30,11 +31,13 @@ async def scrape_single_async(session, page: int):
         resp_json = await resp.json()
         return resp_json
 
+
 def get_total_record():
     """Get the total number of pages to scrape based on total jobs and page size"""
     key_dict = scrape_single(1)
     print(f"Total jobs: {key_dict['count']}")
     return key_dict["count"]
+
 
 # def get_filter():
 #     """Get all available filters"""
@@ -49,6 +52,7 @@ def get_total_record():
 #         res_json = scrape_single(page)
 #         jobs.extend(res_json["jobs"])
 #     return jobs
+
 
 async def get_all_page():
     """Scrape all page and append to a dataframe"""
@@ -68,7 +72,9 @@ if __name__ == "__main__":
     # save various filters
     # with open(f"data/{COMPANY}-filter.json", "w") as file:
     #     json.dump(get_filter(), file, indent=4, sort_keys=True)
-    
+
     # save the jobs description
     result = asyncio.run(get_all_page())
-    pd.DataFrame(result).to_csv(f"data/{COMPANY}-{date.today()}.csv", index=False, encoding="utf-8-sig")
+    pd.DataFrame(result).to_csv(
+        f"data/{COMPANY}-{date.today()}.csv", index=False, encoding="utf-8-sig"
+    )
