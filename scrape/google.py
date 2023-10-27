@@ -54,7 +54,7 @@ def get_total_record():
 #     return jobs
 
 
-async def get_all_page():
+async def get_all_pages_async():
     """Scrape all page and append to a dataframe"""
     total_record = get_total_record()
     total_page = math.ceil(total_record / PAGE_SIZE)
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     #     json.dump(get_filter(), file, indent=4, sort_keys=True)
 
     # save the jobs description
-    result = asyncio.run(get_all_page())
+    result = asyncio.run(get_all_pages_async())
     pd.DataFrame(result).to_csv(
         f"data/{COMPANY}-{date.today()}.csv", index=False, encoding="utf-8-sig"
     )

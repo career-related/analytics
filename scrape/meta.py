@@ -3,6 +3,7 @@ Website: https://www.metacareers.com/jobs
 """
 
 import asyncio
+import time
 from datetime import date
 
 import aiohttp
@@ -11,6 +12,7 @@ import requests
 from bs4 import BeautifulSoup
 
 COMPANY = "meta"
+BATCH_SIZE = 100
 
 # fields - id, title, locations, teams, sub_teams
 
@@ -45,6 +47,7 @@ def scrape_all():
 
 
 async def parse_html(html):
+    """Parse HTML using beautifulsoup"""
     soup = BeautifulSoup(html, "html.parser")
     result_dict = {}
     result_dict["Title"] = soup.find(class_="_9ata").text
@@ -79,13 +82,28 @@ async def scrape_single_by_id(session, job_id):
 
 async def scrape_multiple_by_id(job_ids):
     """Scrape more job details of multiple jobs using job ids"""
+    conn = aiohttp.TCPConnector(limit=20)
     tasks = []
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(connector=conn) as session:
         for job_id in job_ids:
             task = scrape_single_by_id(session, job_id)
             tasks.append(task)
         jobs = await asyncio.gather(*tasks)
     return jobs
+
+
+async def batch_scrape_by_id(job_ids, batch_size=BATCH_SIZE):
+    """Running in batches to avoid running into error 429"""
+    ls_df = []
+    batches = [job_ids[i : i + batch_size] for i in range(0, len(job_ids), BATCH_SIZE)]
+    for idx, batch in enumerate(batches):
+        print(idx)
+        df_job = await scrape_multiple_by_id(batch)
+        df_job = [job for job in df_job if job != {}]
+        df_job = pd.DataFrame(df_job)
+        ls_df.append(df_job)
+        time.sleep(5 * idx)
+    return pd.concat(ls_df)
 
 
 if __name__ == "__main__":
@@ -97,8 +115,8 @@ if __name__ == "__main__":
 
     # run 2
     job_ids = df["id"]
-    jobs = asyncio.run(scrape_multiple_by_id(job_ids))
-    df_job = pd.DataFrame(jobs)
+    # df_job = pd.DataFrame(asyncio.run(scrape_multiple_by_id(job_ids)))
+    df_job = asyncio.run(batch_scrape_by_id(job_ids))
     df_job.to_csv(
         f"data/{COMPANY}-{date.today()}-run2.csv", index=False, encoding="utf-8-sig"
     )

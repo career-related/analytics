@@ -14,7 +14,7 @@ import requests
 
 COMPANY = "microsoft"
 PAGE_SIZE = 20
-BATCH_SIZE = 200
+BATCH_SIZE = 100
 
 # dict key from response body - ['searchId', 'totalJobs', 'filters', 'jobs', 'id']
 
@@ -54,7 +54,7 @@ def get_filter():
     return key_dict["filters"]
 
 
-async def get_all_pages():
+async def get_all_pages_async():
     """Scrape all page and append to a dataframe"""
     total_record = get_total_record()
     total_page = math.ceil(total_record / PAGE_SIZE)
@@ -82,8 +82,9 @@ async def scrape_single_by_id(session, job_id):
 
 async def scrape_multiple_by_id(job_ids):
     """Scrape more job details of multiple jobs using job ids"""
+    conn = aiohttp.TCPConnector(limit=20)
     tasks = []
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(connector=conn) as session:
         for job_id in job_ids:
             task = scrape_single_by_id(session, job_id)
             tasks.append(task)
@@ -111,7 +112,7 @@ if __name__ == "__main__":
         json.dump(get_filter(), file, indent=4, sort_keys=True)
 
     # run 1
-    df = pd.DataFrame(asyncio.run(get_all_pages()))
+    df = pd.DataFrame(asyncio.run(get_all_pages_async()))
     df.to_csv(
         f"data/{COMPANY}-{date.today()}-run1.csv", index=False, encoding="utf-8-sig"
     )
