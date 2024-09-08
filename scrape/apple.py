@@ -1,117 +1,163 @@
 """
 Website: https://jobs.apple.com/en-us/search?sort=relevance
+URL: https://jobs.apple.com/api/role/search
+Response body fields: ['searchResults', 'totalRecords']
+  - 'searchResults' is the list of jobs
 """
 
-import ast
 import asyncio
+import json
+import math
+import os
 import time
 from datetime import date
 
 import aiohttp
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
 
 COMPANY = "apple"
 PAGE_SIZE = 20
-BATCH_SIZE = 50
+APPLE_URL = "https://jobs.apple.com/api/role/search"
+BATCH_SIZE_1 = 15
+APPLE_CSRF_URL = "https://jobs.apple.com/api/csrfToken"
+APPLE_JOB_DETAIL_URL = (
+    "https://jobs.apple.com/api/role/detail/{job_id}?languageCd=en-us"
+)
 
 
-def scrape_single(page: int):
+def get_headers():
+    with requests.get(APPLE_CSRF_URL) as resp:
+        headers = {
+            "cookie": "; ".join(
+                [cookie.name + "=" + cookie.value for cookie in resp.cookies]
+            ),
+            "X-Apple-CSRF-Token": resp.headers["X-Apple-CSRF-Token"],
+            "host": "jobs.apple.com",
+            "Accept": "*/*",
+            "Content-Type": "application/json",
+        }
+    return headers
+
+
+def scrape_single(page: int, headers):
     """Scrape a single page of apple career website"""
-    url = f"https://jobs.apple.com/en-us/search?sort=relevance&page={page}"
-    resp = requests.get(url)
-    resp_text = resp.text
-    return resp_text
+    url = APPLE_URL
+    data = json.dumps(
+        {
+            "query": "",
+            "filters": {"range": {"standardWeeklyHours": {"start": None, "end": None}}},
+            "page": page,
+            "locale": "en-us",
+            "sort": "relevance",
+        }
+    )
+    with requests.post(url, data=data, headers=headers) as resp:
+        try:
+            resp_json = resp.json()
+            return resp_json
+        except requests.exceptions.JSONDecodeError:
+            print(f"Failed to scrape page {page}")
+            return {}
 
 
-async def scrape_single_async(session, page: int):
+async def scrape_single_async(session, page: int, headers):
     """Scrape a single page of apple career website"""
-    url = f"https://jobs.apple.com/en-us/search?sort=relevance&page={page}"
-    async with session.get(url) as resp:
-        resp_text = await resp.text()
-    return resp_text
+    url = APPLE_URL
+    data = json.dumps(
+        {
+            "query": "",
+            "filters": {"range": {"standardWeeklyHours": {"start": None, "end": None}}},
+            "page": page,
+            "locale": "en-us",
+            "sort": "relevance" "page",
+        }
+    )
+    async with session.post(url, data=data, headers=headers) as resp:
+        try:
+            resp_json = await resp.json()
+            return resp_json
+        except aiohttp.client_exceptions.ContentTypeError:
+            print(f"Failed to scrape page {page}")
+            return {}
 
 
-def get_total_page():
-    resp = scrape_single(1)
-    soup = BeautifulSoup(resp, "html.parser")
-    element_page = soup.find_all(class_="pageNumber")
-    if len(element_page) >= 2:
-        page_number = element_page[1].get_text()
-        return int(page_number)
+async def scrape_multiple_async(pages, headers):
+    """Scrape more job details of multiple jobs using job ids"""
+    conn = aiohttp.TCPConnector(limit=20)
+    tasks = []
+    async with aiohttp.ClientSession(connector=conn) as session:
+        for page in pages:
+            task = scrape_single_async(session, page, headers)
+            tasks.append(task)
+        jobs = await asyncio.gather(*tasks)
+        return jobs
 
 
-def get_content(resp):
-    soup = BeautifulSoup(resp, "html.parser")
-    try:
-        element_script = soup.find_all("script")[2].get_text()
-    except IndexError as e:
-        print(resp)
-        exit(0)
-    search_result = element_script.split('"searchResults":')[1]
-    search_result = search_result.split('"totalRecords"')[0].strip(" ,")
-    search_result = search_result.replace("false", "False")
-    search_result = search_result.replace("true", "True")
-    search_result = search_result.replace("null", "None")
-    try:
-        res = ast.literal_eval(search_result)
-    except:
-        print(search_result)
-        print(type(search_result))
-        exit(0)
-    return res
+def get_total_records():
+    headers = get_headers()
+    resp = scrape_single(1, headers)
+    total = resp["totalRecords"]
+    print(f"Total jobs: {total}")
+    return total
 
 
 def get_all_pages():
-    total_page = get_total_page()
+    """Scrape all page and append to a dataframe"""
+    total_record = get_total_records()
+    total_page = math.ceil(total_record / PAGE_SIZE)
+    headers = get_headers()
     jobs = []
     for page in range(1, total_page + 1):
-        resp = scrape_single(page)
-        jobs.extend(get_content(resp))
+        res_json = scrape_single(page, headers)
+        if "searchResults" in res_json:
+            jobs.extend(res_json["searchResults"])
     return jobs
 
 
 async def get_all_pages_async():
-    """Scrape all page an append to a dataframe"""
-    conn = aiohttp.TCPConnector(limit=20)
-    total_page = get_total_page()
-    tasks = []
-    async with aiohttp.ClientSession(connector=conn) as session:
-        for page in range(1, total_page + 1):
-            task = scrape_single_async(session, page)
-            tasks.append(task)
-        jobs = await asyncio.gather(*tasks)
-    result = [get_content(job) for job in jobs]
-    result = [job for single_page in result for job in single_page]
-    return result
+    """Scrape all page and append to a dataframe"""
+    total_record = get_total_records()
+    total_page = math.ceil(total_record / PAGE_SIZE)
+    headers = get_headers()
 
+    ls_df = []
+    batches = [range(i, i + BATCH_SIZE_1) for i in range(0, total_page, BATCH_SIZE_1)]
+    for idx, batch in enumerate(batches):
+        if idx != 0:
+            sleep_duration = 60  # 5 * random.randrange(4, 7)
+            print(f"Sleep for {sleep_duration} seconds")
+            time.sleep(sleep_duration)
+        print(idx)
+        print("Input length:", len(batch))
+        jobs = await scrape_multiple_async(batch, headers)
 
-async def parse_html(html):
-    """Parse HTML using beautifulsoup"""
-    soup = BeautifulSoup(html, "html.parser")
-    result_dict = {}
-    result_dict["Title"] = soup.find(id="jd__header--title").text
-    result_dict["Location"] = soup.find(id="job-location-name").text
-    result_dict["Team"] = soup.find(id="job-team-name").text
-    key_qualifications = soup.find(id="jd-key-qualifications")
-    result_dict["Key_qualifications"] = [
-        li.get_text() for li in key_qualifications.find_all("li")
-    ]
-    result_dict["Description"] = soup.find(id="jd-description").text()
-    result_dict["Education_Experience"] = soup.find(id="jd-education-experience").text()
-    return result_dict
+        jobs = [job["searchResults"] for job in jobs if job != {}]
+        print("Output length:", len(jobs))
+        df_job = pd.DataFrame(jobs)
+        ls_df.append(df_job)
+    return pd.concat(ls_df)
+
+    # tasks = []
+    # async with aiohttp.ClientSession() as session:
+    #     for page in range(1, total_page + 1):
+    #         task = scrape_single_async(session, page, headers)
+    #         tasks.append(task)
+    #     jobs = await asyncio.gather(*tasks)
+    # result = [job["searchResults"] for job in jobs if job != {}]
+    # result = [job for single_page in result for job in single_page]
+    # return result
 
 
 async def scrape_single_by_id(session, job_id):
     """Scrape more job details using job id"""
-    url = f"https://jobs.apple.com/en-us/details/{job_id}"
+    url = APPLE_JOB_DETAIL_URL.format(job_id=job_id)
     async with session.get(url) as resp:
         try:
-            html = await resp.text()
-            resp = await parse_html(html)
-            return resp
+            resp_json = await resp.json()
+            return resp_json
         except aiohttp.client_exceptions.ContentTypeError:
+            print(f"Failed to scrape {job_id}")
             return {}
 
 
@@ -124,39 +170,23 @@ async def scrape_multiple_by_id(job_ids):
             task = scrape_single_by_id(session, job_id)
             tasks.append(task)
         jobs = await asyncio.gather(*tasks)
-    return jobs
-
-
-async def batch_scrape_by_id(job_ids, batch_size=BATCH_SIZE):
-    """Running in batches to avoid running into error 429"""
-    ls_df = []
-    batches = [job_ids[i : i + batch_size] for i in range(0, len(job_ids), BATCH_SIZE)]
-    for idx, batch in enumerate(batches):
-        print(idx)
-        df_job = await scrape_multiple_by_id(batch)
-        df_job = [job for job in df_job if job != {}]
-        df_job = pd.DataFrame(df_job)
-        ls_df.append(df_job)
-        time.sleep(5 * idx)
-    return pd.concat(ls_df)
+        return jobs
 
 
 if __name__ == "__main__":
-    # run 1
-    start = time.time()
-    # df = pd.DataFrame(get_all_pages())  # without sychronuous takes about 6 minutes to run
-    df = pd.DataFrame(
-        asyncio.run(get_all_pages_async())
-    )  # with async takes about 40 seconds
+    os.makedirs("data", exist_ok=True)
+
+    # run 1: scrape the job cards
+    df = asyncio.run(get_all_pages_async())
+    # df = pd.DataFrame(get_all_pages())
     df.to_csv(
         f"data/{COMPANY}-{date.today()}-run1.csv", index=False, encoding="utf-8-sig"
     )
-    print(f"Time taken: {time.time() - start}")
 
-    # run 2
-    job_ids = df["positionId"]
+    # # run 2: scrape each job by job ID
+    # job_ids = df["id"]
+    # # df_job = pd.DataFrame(asyncio.run(scrape_multiple_by_id(job_ids)))
     # df_job = pd.DataFrame(asyncio.run(scrape_multiple_by_id(job_ids)))
-    df_job = asyncio.run(batch_scrape_by_id(job_ids))
-    df_job.to_csv(
-        f"data/{COMPANY}-{date.today()}-run2.csv", index=False, encoding="utf-8-sig"
-    )
+    # df_job.to_csv(
+    #     f"data/{COMPANY}-{date.today()}-run2.csv", index=False, encoding="utf-8-sig"
+    # )

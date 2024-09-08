@@ -1,8 +1,10 @@
 """
 Website: https://www.metacareers.com/jobs
+URL: 
 """
 
 import asyncio
+import os
 import time
 from datetime import date
 
@@ -107,6 +109,8 @@ async def batch_scrape_by_id(job_ids, batch_size=BATCH_SIZE):
 
 
 if __name__ == "__main__":
+    os.makedirs("data", exist_ok=True)
+
     # run 1
     df = pd.DataFrame(scrape_all())
     df.to_csv(
